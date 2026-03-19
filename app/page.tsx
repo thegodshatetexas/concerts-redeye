@@ -1,5 +1,8 @@
-import { fetchConcerts, type Concert } from "@/lib/ical";
+import { fetchConcerts } from "@/lib/ical";
+import { classifyConcerts } from "@/lib/classifier";
+import { getDecisions } from "@/lib/decisions";
 import { ConcertList } from "@/components/ConcertList";
+import { type Concert } from "@/lib/ical";
 
 export const revalidate = 3600; // revalidate every hour
 
@@ -8,7 +11,17 @@ export default async function HomePage() {
   let error: string | null = null;
 
   try {
-    concerts = await fetchConcerts();
+    const allConcerts = await fetchConcerts();
+    const classified = classifyConcerts(allConcerts);
+    const decisions = getDecisions();
+
+    // Show events that are auto-classified as concerts, or manually confirmed
+    concerts = classified.filter((c) => {
+      const adminDecision = decisions[c.uid];
+      if (adminDecision === "concert") return true;
+      if (adminDecision === "not_concert") return false;
+      return c.classification === "concert";
+    });
   } catch (e) {
     error = e instanceof Error ? e.message : "Failed to load concerts.";
   }
