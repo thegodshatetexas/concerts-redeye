@@ -1,13 +1,18 @@
 import { fetchConcerts } from "@/lib/ical";
 import { classifyConcerts } from "@/lib/classifier";
 import { getDecisions } from "@/lib/decisions";
+import { lookupArtist, type ArtistInfo } from "@/lib/musicbrainz";
 import { ConcertList } from "@/components/ConcertList";
 import { type Concert } from "@/lib/ical";
 
 export const revalidate = 3600; // revalidate every hour
 
+export interface EnrichedConcert extends Concert {
+  artist?: ArtistInfo;
+}
+
 export default async function HomePage() {
-  let concerts: Concert[] = [];
+  let concerts: EnrichedConcert[] = [];
   let error: string | null = null;
 
   try {
@@ -16,12 +21,27 @@ export default async function HomePage() {
     const decisions = getDecisions();
 
     // Show events that are auto-classified as concerts, or manually confirmed
-    concerts = classified.filter((c) => {
+    const filtered = classified.filter((c) => {
       const adminDecision = decisions[c.uid];
       if (adminDecision === "concert") return true;
       if (adminDecision === "not_concert") return false;
       return c.classification === "concert";
     });
+
+    // Enrich with MusicBrainz — best-effort, sequential to respect rate limit
+    const enriched: EnrichedConcert[] = [];
+    for (const concert of filtered) {
+      let artist: ArtistInfo | undefined;
+      try {
+        const info = await lookupArtist(concert.title);
+        if (info) artist = info;
+      } catch {
+        // best-effort — swallow errors
+      }
+      enriched.push({ ...concert, artist });
+    }
+
+    concerts = enriched;
   } catch (e) {
     error = e instanceof Error ? e.message : "Failed to load concerts.";
   }
