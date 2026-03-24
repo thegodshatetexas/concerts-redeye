@@ -1,7 +1,7 @@
 import { type EnrichedConcert } from "@/app/page";
 import { setlistUrl } from "@/lib/setlistfm";
 import { format } from "date-fns";
-import { Calendar, MapPin, Music } from "lucide-react";
+import { Calendar, MapPin, Music, User } from "lucide-react";
 
 interface ConcertCardProps {
   concert: EnrichedConcert;
@@ -43,13 +43,36 @@ export function ConcertCard({ concert, past = false }: ConcertCardProps) {
 
         {/* Details */}
         <div className="flex-1 min-w-0">
-          {/* Title row */}
-          <div className="flex items-center gap-2 mb-1">
-            <Music className="size-3.5 shrink-0 text-red-400" />
-            <h3 className="truncate text-base font-semibold text-white">
-              {concert.title}
-            </h3>
+          {/* Title row with artist photo */}
+          <div className="flex items-start justify-between gap-3 mb-1">
+            <div className="flex items-center gap-2 min-w-0">
+              <Music className="size-3.5 shrink-0 text-red-400" />
+              <h3 className="truncate text-base font-semibold text-white">
+                {concert.title}
+              </h3>
+            </div>
+
+            {/* Artist photo (top-right) */}
+            {concert.spotifyImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={concert.spotifyImageUrl}
+                alt={`${concert.title} artist photo`}
+                className="size-12 rounded-full object-cover shrink-0 border border-white/10"
+              />
+            ) : (
+              <div className="size-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                <User className="size-5 text-white/20" />
+              </div>
+            )}
           </div>
+
+          {/* Opening acts */}
+          {concert.openingActs && concert.openingActs.length > 0 && (
+            <p className="text-xs text-white/50 mb-1.5">
+              w/ {concert.openingActs.join(", ")}
+            </p>
+          )}
 
           {/* Genre badges */}
           {genres.length > 0 && (

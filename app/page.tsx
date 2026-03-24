@@ -2,6 +2,8 @@ import { fetchConcerts } from "@/lib/ical";
 import { classifyConcerts } from "@/lib/classifier";
 import { getDecisions } from "@/lib/decisions";
 import { lookupArtist, type ArtistInfo } from "@/lib/musicbrainz";
+import { getArtistImage } from "@/lib/spotify";
+import { getOpeningActs } from "@/lib/setlistfm";
 import { ConcertList } from "@/components/ConcertList";
 import { type Concert } from "@/lib/ical";
 
@@ -9,6 +11,8 @@ export const revalidate = 3600; // revalidate every hour
 
 export interface EnrichedConcert extends Concert {
   artist?: ArtistInfo;
+  spotifyImageUrl?: string;
+  openingActs?: string[];
 }
 
 export default async function HomePage() {
@@ -28,17 +32,35 @@ export default async function HomePage() {
       return c.classification === "concert";
     });
 
-    // Enrich with MusicBrainz — best-effort, sequential to respect rate limit
+    // Enrich with MusicBrainz, Spotify, and Setlist.fm — best-effort
     const enriched: EnrichedConcert[] = [];
     for (const concert of filtered) {
       let artist: ArtistInfo | undefined;
+      let spotifyImageUrl: string | undefined;
+      let openingActs: string[] | undefined;
+
       try {
         const info = await lookupArtist(concert.title);
         if (info) artist = info;
       } catch {
-        // best-effort — swallow errors
+        // best-effort
       }
-      enriched.push({ ...concert, artist });
+
+      try {
+        const imgUrl = await getArtistImage(concert.title);
+        if (imgUrl) spotifyImageUrl = imgUrl;
+      } catch {
+        // best-effort
+      }
+
+      try {
+        const acts = await getOpeningActs(concert.title, concert.startDate);
+        if (acts.length > 0) openingActs = acts;
+      } catch {
+        // best-effort
+      }
+
+      enriched.push({ ...concert, artist, spotifyImageUrl, openingActs });
     }
 
     concerts = enriched;
