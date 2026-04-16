@@ -12,7 +12,12 @@ export function setlistUrl(artistName: string): string {
 
 /**
  * Look up opening acts for an artist on a given date via Setlist.fm API.
- * Returns an array of opener names (empty array if none found or on any error).
+ *
+ * Strategy:
+ * 1. Search for the headliner's setlist by artist name + date to get the venue ID
+ * 2. Query all setlists at that venue on the same date
+ * 3. Return all other artists on the bill as openers
+ *
  * Results are cached in-memory for 24h.
  */
 export async function getOpeningActs(
@@ -33,37 +38,50 @@ export async function getOpeningActs(
   const cached = cache.get(key);
   if (cached && cached.expires > Date.now()) return cached.data;
 
-  try {
-    const url = `https://api.setlist.fm/rest/1.0/search/setlists?artistName=${encodeURIComponent(artistName)}&date=${dateStr}`;
-    const res = await fetch(url, {
-      headers: {
-        Accept: "application/json",
-        "x-api-key": apiKey,
-      },
-    });
+  const headers = {
+    Accept: "application/json",
+    "x-api-key": apiKey,
+  };
 
-    if (!res.ok) {
+  try {
+    // Step 1: find the headliner's setlist to get the venue ID
+    const headlinerUrl = `https://api.setlist.fm/rest/1.0/search/setlists?artistName=${encodeURIComponent(artistName)}&date=${dateStr}`;
+    const headlinerRes = await fetch(headlinerUrl, { headers });
+
+    if (!headlinerRes.ok) {
       cache.set(key, { data: [], expires: Date.now() + TTL_MS });
       return [];
     }
 
-    const json = await res.json() as SetlistFmResponse;
-    const setlists = json.setlist ?? [];
+    const headlinerJson = await headlinerRes.json() as SetlistFmResponse;
+    const headlinerSetlist = headlinerJson.setlist?.[0];
 
-    // Collect all unique support/opening act names across matching setlists
-    const openers = new Set<string>();
-    for (const setlist of setlists) {
-      for (const set of setlist.sets?.set ?? []) {
-        if (set.encore === undefined || set.encore === 0) {
-          // Support acts are typically marked with a name on the set
-          if (set.name && set.name.toLowerCase() !== setlist.artist?.name?.toLowerCase()) {
-            openers.add(set.name);
-          }
-        }
-      }
+    if (!headlinerSetlist?.venue?.id) {
+      cache.set(key, { data: [], expires: Date.now() + TTL_MS });
+      return [];
     }
 
-    const result = Array.from(openers);
+    const venueId = headlinerSetlist.venue.id;
+    const headlinerName = headlinerSetlist.artist?.name ?? artistName;
+
+    // Step 2: get all setlists at that venue on the same date
+    const venueUrl = `https://api.setlist.fm/rest/1.0/search/setlists?venueId=${venueId}&date=${dateStr}`;
+    const venueRes = await fetch(venueUrl, { headers });
+
+    if (!venueRes.ok) {
+      cache.set(key, { data: [], expires: Date.now() + TTL_MS });
+      return [];
+    }
+
+    const venueJson = await venueRes.json() as SetlistFmResponse;
+    const allSetlists = venueJson.setlist ?? [];
+
+    // Step 3: everyone except the headliner is an opener
+    const openers = allSetlists
+      .map((s) => s.artist?.name ?? "")
+      .filter((name) => name && name.toLowerCase() !== headlinerName.toLowerCase());
+
+    const result = Array.from(new Set(openers));
     cache.set(key, { data: result, expires: Date.now() + TTL_MS });
     return result;
   } catch {
@@ -76,19 +94,14 @@ interface SetlistFmArtist {
   name?: string;
 }
 
-interface SetlistFmSet {
+interface SetlistFmVenue {
+  id?: string;
   name?: string;
-  encore?: number;
-  song?: unknown[];
-}
-
-interface SetlistFmSets {
-  set: SetlistFmSet[];
 }
 
 interface SetlistFmSetlist {
   artist?: SetlistFmArtist;
-  sets?: SetlistFmSets;
+  venue?: SetlistFmVenue;
 }
 
 interface SetlistFmResponse {
