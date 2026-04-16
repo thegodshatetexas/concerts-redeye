@@ -44,12 +44,21 @@ export function ConcertCard({ concert, past = false }: ConcertCardProps) {
         {/* Details */}
         <div className="flex-1 min-w-0">
           {/* Title row with artist photo */}
-          <div className="flex items-start justify-between gap-3 mb-1">
-            <div className="flex items-center gap-2 min-w-0">
-              <Music className="size-3.5 shrink-0 text-red-400" />
-              <h3 className="truncate text-base font-semibold text-white">
-                {concert.title}
-              </h3>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <Music className="size-3.5 shrink-0 text-red-400" />
+                <h3 className="truncate text-base font-semibold text-white">
+                  {concert.title}
+                </h3>
+              </div>
+
+              {/* Opening acts — inline under title, no extra gap */}
+              {concert.openingActs && concert.openingActs.length > 0 && (
+                <p className="mt-0.5 text-xs text-white/45 pl-[22px]">
+                  w/ {concert.openingActs.join(", ")}
+                </p>
+              )}
             </div>
 
             {/* Artist photo (top-right) */}
@@ -67,16 +76,9 @@ export function ConcertCard({ concert, past = false }: ConcertCardProps) {
             )}
           </div>
 
-          {/* Opening acts */}
-          {concert.openingActs && concert.openingActs.length > 0 && (
-            <p className="text-xs text-white/50 mb-1.5">
-              w/ {concert.openingActs.join(", ")}
-            </p>
-          )}
-
           {/* Genre badges */}
           {genres.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-2">
+            <div className="flex flex-wrap gap-1.5 mt-2 mb-2">
               {genres.map((g) => (
                 <span
                   key={g}
